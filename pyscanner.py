@@ -27,13 +27,22 @@ def corner_detection(im):
         ρ = lines[comb, 0]
         θ = lines[comb, 1]
         
-        # Check that pairs of lines are parallel.
+        # Check that lines are parallel by pairs.
         def are_parallel(θ1, θ2):
             return np.abs(θ1-θ2) < np.pi/8 or np.abs(np.abs(θ1-θ2)-np.pi) < np.pi/8
                                                      
         if (not (are_parallel(θ[0], θ[1]) and are_parallel(θ[2], θ[3]))
             and not (are_parallel(θ[0], θ[2]) and are_parallel(θ[1], θ[3]))
             and not (are_parallel(θ[0], θ[3]) and are_parallel(θ[1], θ[2]))
+        ):
+            continue
+
+        # Check that there are no more than 3 parallel lines.
+        if ((are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[2]))
+            or (are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[3]))
+            or (are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[3]))
+            or (are_parallel(θ[0], θ[2]) and are_parallel(θ[0], θ[3]))
+            or (are_parallel(θ[1], θ[2]) and are_parallel(θ[1], θ[3]))
         ):
             continue
         
