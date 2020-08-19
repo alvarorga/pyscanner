@@ -101,21 +101,40 @@ def do_image_thresholding(im):
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 51, 5)
     return img
 
-def scanner_main(image_path, dest_name):
+def insert_in_namepath(path, to_insert):
+    spath = path.split(".")
+    spath.insert(-1, to_insert)
+    spath[-1] = "." + spath[-1]
+    return "".join(spath)
+
+def scanner_main(image_path, dest_name, debug=False):
     im = cv2.imread(image_path)
     orig = im.copy()
     
     doc_corners = corner_detection(im)
-    
     im = perspective_transformation(im, doc_corners)
-    
     im = do_image_thresholding(im)
+
     cv2.imwrite(dest_name, im)
+
+    # Debug: write different images of the middle processes.
+    if debug == True:
+        # Pic 1: Original image with detected corners.
+        dbg1 = orig.copy()
+        circ_radius = int(np.shape(dbg1)[0]*0.01)
+        for corner in doc_corners:
+            cv2.circle(dbg1, (int(corner[0]), int(corner[1])), circ_radius, (0, 0, 255), -1)
+        
+        cv2.imwrite(insert_in_namepath(dest_name, "_dbg1"), dbg1)
     
     return
 
 if len(sys.argv) >= 3:
-    scanner_main(sys.argv[1], sys.argv[2])
+    if "--debug" in sys.argv:
+        sys.argv.remove("--debug")
+        scanner_main(sys.argv[1], sys.argv[2], True)
+    else:
+        scanner_main(sys.argv[1], sys.argv[2], False)
 else:
     print("Please, introduce the path of the original image and the path of the destination image.")
     sys.exit()
