@@ -21,6 +21,7 @@ def corner_detection(im):
     # of four lines, which are parallel two by two, and have maximal area.
     max_area = -1.0
     doc_corners = []
+    doc_edges = []
     # Iterate through every pair of lines. 
     for comb in combinations(range(np.shape(lines)[0]), 4):
         ρ = lines[comb, 0]
@@ -69,6 +70,7 @@ def corner_detection(im):
         # Choose if they are candidate for document's corners.
         if area > max_area:
             doc_corners = corners
+            doc_edges = lines[comb, :]
             max_area = area
     
     # Rearrange document's corners.
@@ -86,7 +88,7 @@ def corner_detection(im):
     doc_corners[:, 0] *= orig_imsize[0]/imsize[0]
     doc_corners[:, 1] *= orig_imsize[1]/imsize[1]
     
-    return doc_corners
+    return doc_corners, doc_edges, lines
 
 def perspective_transformation(im, doc_corners):
     imsize = np.shape(im)
@@ -111,21 +113,46 @@ def scanner_main(image_path, dest_name, debug=False):
     im = cv2.imread(image_path)
     orig = im.copy()
     
-    doc_corners = corner_detection(im)
+    doc_corners, doc_edges, lines = corner_detection(im)
     im = perspective_transformation(im, doc_corners)
     im = do_image_thresholding(im)
 
     cv2.imwrite(dest_name, im)
 
-    # Debug: write different images of the middle processes.
+    # Debug: write an image of the middle process.
     if debug == True:
-        # Pic 1: Original image with detected corners.
-        dbg1 = orig.copy()
-        circ_radius = int(np.shape(dbg1)[0]*0.01)
+        im_dbg = orig.copy()
+
+        # Overwrite detected document corners.
+        circ_radius = int(np.shape(im_dbg)[0]*0.01)
         for corner in doc_corners:
-            cv2.circle(dbg1, (int(corner[0]), int(corner[1])), circ_radius, (0, 0, 255), -1)
+            cv2.circle(im_dbg, (int(corner[0]), int(corner[1])), circ_radius, (0, 0, 255), -1)
+
+        # Overwrite detected lines.
+        def xy_hough_lines(ρ, θ, x):
+            y = (ρ - x*np.cos(θ))/np.sin(θ)
+            return int(y)
+
+        for line in lines:
+            ρ, θ = line
+            ρ *= np.shape(im_dbg)[0]/500
+            x1 = 0
+            y1 = xy_hough_lines(ρ, θ, x1)
+            x2 = np.shape(im_dbg)[0]
+            y2 = xy_hough_lines(ρ, θ, x2)
+            cv2.line(im_dbg, (x1, y1), (x2, y2), (255, 0, 0), 5)
+
+        # Overwrite detected document edges.
+        for line in doc_edges:
+            ρ, θ = line
+            ρ *= np.shape(im_dbg)[0]/500
+            x1 = 0
+            y1 = xy_hough_lines(ρ, θ, x1)
+            x2 = np.shape(im_dbg)[0]
+            y2 = xy_hough_lines(ρ, θ, x2)
+            cv2.line(im_dbg, (x1, y1), (x2, y2), (0, 0, 255), 5)
         
-        cv2.imwrite(insert_in_namepath(dest_name, "_dbg1"), dbg1)
+        cv2.imwrite(insert_in_namepath(dest_name, "_dbg"), im_dbg)
     
     return
 
