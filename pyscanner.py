@@ -165,13 +165,13 @@ def scanner_main(image_path, dest_name, debug=False):
     
     return
 
-if len(sys.argv) >= 3:
-    if "--debug" in sys.argv:
-        sys.argv.remove("--debug")
-        scanner_main(sys.argv[1], sys.argv[2], True)
+if __name__ == "__main__":
+    if len(sys.argv) >= 3:
+        if "--debug" in sys.argv:
+            sys.argv.remove("--debug")
+            scanner_main(sys.argv[1], sys.argv[2], True)
+        else:
+            scanner_main(sys.argv[1], sys.argv[2], False)
     else:
-        scanner_main(sys.argv[1], sys.argv[2], False)
-else:
-    print("Please, introduce the path of the original image and the path of the destination image.")
-    sys.exit()
-
+        print("Please, introduce the path of the original image and the path of the destination image.")
+        sys.exit()
