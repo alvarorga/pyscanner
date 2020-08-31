@@ -13,10 +13,10 @@ def corner_detection(im):
     
     # Find Hough lines in the image.
     img = cv2.GaussianBlur(img, (3, 3), 0) 
-    edges = cv2.Canny(img, 55, 175)
-    lines = cv2.HoughLines(edges, 1, np.pi/180, 120)
+    edges = cv2.Canny(img, 40, 120)
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
     lines = lines.reshape(np.shape(lines)[0], 2)
-    
+
     # Find the document's corners. We select as corners those defined as the intersection
     # of four lines, which are parallel two by two, and have maximal area.
     max_area = -1.0
