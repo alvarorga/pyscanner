@@ -82,15 +82,12 @@ def corner_detection(im):
             doc_edges = lines[comb, :]
             max_area = area
     
-    # Rearrange document's corners.
-    ix_upleft_corner = np.argwhere(np.logical_and(doc_corners[:, 0] < imsize[0]/2, 
-                                                  doc_corners[:, 1] < imsize[1]/2))[0, 0]
-    ix_upright_corner = np.argwhere(np.logical_and(doc_corners[:, 0] < imsize[0]/2, 
-                                                   doc_corners[:, 1] > imsize[1]/2))[0, 0]
-    ix_doleft_corner = np.argwhere(np.logical_and(doc_corners[:, 0] > imsize[0]/2, 
-                                                  doc_corners[:, 1] < imsize[1]/2))[0, 0]
-    ix_doright_corner = np.argwhere(np.logical_and(doc_corners[:, 0] > imsize[0]/2, 
-                                                   doc_corners[:, 1] > imsize[1]/2))[0, 0]
+    # Rearrange document's corners. We select each of the corners by projecting
+    # their coordinates on the lines y = x and y = -x.
+    ix_upleft_corner = np.argmin(doc_corners[:, 0] + doc_corners[:, 1])
+    ix_doright_corner = np.argmax(doc_corners[:, 0] + doc_corners[:, 1])
+    ix_upright_corner = np.argmin(doc_corners[:, 0] - doc_corners[:, 1])
+    ix_doleft_corner = np.argmax(doc_corners[:, 0] - doc_corners[:, 1])
     doc_corners = doc_corners[[ix_upleft_corner, ix_upright_corner, ix_doleft_corner, ix_doright_corner]]
     
     # Rescale document's corners to original size.
