@@ -81,6 +81,13 @@ def corner_detection(im):
             doc_corners = corners
             doc_edges = lines[comb, :]
             max_area = area
+
+    # Check if the algorithm has detected four corners.
+    if np.shape(doc_corners)[0] == 4:
+        has_detected_corners = True
+    else:
+        has_detected_corners = False
+        return [], [], lines, has_detected_corners
     
     # Rearrange document's corners. We select each of the corners by projecting
     # their coordinates on the lines y = x and y = -x.
@@ -94,7 +101,7 @@ def corner_detection(im):
     doc_corners[:, 0] *= orig_imsize[0]/imsize[0]
     doc_corners[:, 1] *= orig_imsize[1]/imsize[1]
     
-    return doc_corners, doc_edges, lines
+    return doc_corners, doc_edges, lines, has_detected_corners
 
 def perspective_transformation(im, doc_corners):
     imsize = np.shape(im)
@@ -119,11 +126,16 @@ def scanner_main(image_path, dest_name, debug=False):
     im = cv2.imread(image_path)
     orig = im.copy()
     
-    doc_corners, doc_edges, lines = corner_detection(im)
-    im = perspective_transformation(im, doc_corners)
-    im = do_image_thresholding(im)
+    doc_corners, doc_edges, lines, has_detected_corners = corner_detection(im)
 
-    cv2.imwrite(dest_name, im)
+    if has_detected_corners:
+        im = perspective_transformation(im, doc_corners)
+        im = do_image_thresholding(im)
+
+        # Save final image.
+        cv2.imwrite(dest_name, im)
+    else:
+        print("The algorithm didn't detect the corners of the document. Please check with --debug enabled.")
 
     # Debug: write an image of the middle process.
     if debug == True:
