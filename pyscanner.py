@@ -87,7 +87,7 @@ def corner_detection(im):
         has_detected_corners = True
     else:
         has_detected_corners = False
-        return [], [], lines, has_detected_corners
+        return [], [], lines, has_detected_corners, 1.
     
     # Rearrange document's corners. We select each of the corners by projecting
     # their coordinates on the lines y = x and y = -x.
@@ -96,19 +96,35 @@ def corner_detection(im):
     ix_upright_corner = np.argmin(doc_corners[:, 0] - doc_corners[:, 1])
     ix_doleft_corner = np.argmax(doc_corners[:, 0] - doc_corners[:, 1])
     doc_corners = doc_corners[[ix_upleft_corner, ix_upright_corner, ix_doleft_corner, ix_doright_corner]]
+
+    # Approximate measurement of document's scale.
+    # Mean of vertical and horizontal lenghts.
+    µ_vl = (
+        np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_upleft_corner])
+        + np.linalg.norm(doc_corners[ix_doright_corner] - doc_corners[ix_upright_corner])
+    )/2
+    µ_hl = (
+        np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_doright_corner])
+        + np.linalg.norm(doc_corners[ix_upleft_corner] - doc_corners[ix_upright_corner])
+    )/2
+    doc_scale = µ_vl/µ_hl
     
     # Rescale document's corners to original size.
     doc_corners[:, 0] *= orig_imsize[0]/imsize[0]
     doc_corners[:, 1] *= orig_imsize[1]/imsize[1]
     
-    return doc_corners, doc_edges, lines, has_detected_corners
+    return doc_corners, doc_edges, lines, has_detected_corners, doc_scale
 
-def perspective_transformation(im, doc_corners):
+def perspective_transformation(im, doc_corners, doc_scale):
     imsize = np.shape(im)
     pts1 = np.float32(doc_corners)
-    pts2 = np.float32([[0, 0], [0, imsize[0]], [imsize[1], 0], [imsize[1], imsize[0]]])
+    # Height and width of original image.
+    H, W = imsize[:2]
+    # Rescale to respect scale of document.
+    W *= doc_scale
+    pts2 = np.float32([[0, 0], [0, H], [W, 0], [W, H]])
     M = cv2.getPerspectiveTransform(pts1, pts2)
-    imt = cv2.warpPerspective(im, M, (imsize[1], imsize[0]))
+    imt = cv2.warpPerspective(im, M, (int(W), H))
     return imt
 
 def do_image_thresholding(im):
@@ -126,10 +142,10 @@ def scanner_main(image_path, dest_name, debug=False):
     im = cv2.imread(image_path)
     orig = im.copy()
     
-    doc_corners, doc_edges, lines, has_detected_corners = corner_detection(im)
+    doc_corners, doc_edges, lines, has_detected_corners, doc_scale = corner_detection(im)
 
     if has_detected_corners:
-        im = perspective_transformation(im, doc_corners)
+        im = perspective_transformation(im, doc_corners, doc_scale)
         im = do_image_thresholding(im)
 
         # Save final image.
