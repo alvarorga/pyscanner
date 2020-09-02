@@ -4,6 +4,7 @@ import imutils
 from itertools import combinations
 import numpy as np
 
+
 def corner_detection(im):
     orig_imsize = np.shape(im)[0:2]
     # Resize and change color to greys.
@@ -115,6 +116,7 @@ def corner_detection(im):
     
     return doc_corners, doc_edges, lines, has_detected_corners, doc_scale
 
+
 def perspective_transformation(im, doc_corners, doc_scale):
     imsize = np.shape(im)
     pts1 = np.float32(doc_corners)
@@ -127,16 +129,19 @@ def perspective_transformation(im, doc_corners, doc_scale):
     imt = cv2.warpPerspective(im, M, (int(W), H))
     return imt
 
+
 def do_image_thresholding(im):
     img = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 51, 5)
     return img
+
 
 def insert_in_namepath(path, to_insert):
     spath = path.split(".")
     spath.insert(-1, to_insert)
     spath[-1] = "." + spath[-1]
     return "".join(spath)
+
 
 def scanner_main(image_path, dest_name, debug=False):
     im = cv2.imread(image_path)
@@ -189,6 +194,7 @@ def scanner_main(image_path, dest_name, debug=False):
         cv2.imwrite(insert_in_namepath(dest_name, "_dbg"), im_dbg)
     
     return
+
 
 if __name__ == "__main__":
     if len(sys.argv) >= 3:
