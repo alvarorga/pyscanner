@@ -49,8 +49,15 @@ def corner_detection(im):
         
         # Find all 4 corners.
         def line_intersection(ρ1, ρ2, θ1, θ2):
-            x = (ρ1/np.sin(θ1) - ρ2/np.sin(θ2))/(1/np.tan(θ1) - 1/np.tan(θ2))
-            y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
+            if np.abs(np.sin(θ1)) < 1e-3:
+                x = ρ1/np.cos(θ1)
+                y = (ρ2 - x*np.cos(θ2))/np.sin(θ2)
+            elif np.abs(np.sin(θ2)) < 1e-3:
+                x = ρ2/np.cos(θ2)
+                y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
+            else:
+                x = (ρ1/np.sin(θ1) - ρ2/np.sin(θ2))/(1/np.tan(θ1) - 1/np.tan(θ2))
+                y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
             return [x, y]
         
         corners = []
@@ -167,10 +174,13 @@ def scanner_main(image_path, dest_name, debug=False):
         for corner in doc_corners:
             cv2.circle(im_dbg, (int(corner[0]), int(corner[1])), circ_radius, (0, 0, 255), -1)
 
-        # Overwrite detected lines.
+        # Overwrite detected lines. If line is vertical return ad hoc values.
         def xy_hough_lines(ρ, θ, x):
-            y = (ρ - x*np.cos(θ))/np.sin(θ)
-            return int(y)
+            if np.abs(np.sin(θ)) > 1e-3:
+                y = (ρ - x*np.cos(θ))/np.sin(θ)
+                return int(y)
+            else:
+                return 0 if x == 0 else 500
 
         for line in lines:
             ρ, θ = line
