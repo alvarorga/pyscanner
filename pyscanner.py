@@ -106,16 +106,16 @@ def corner_detection(im):
     doc_corners = doc_corners[[ix_upleft_corner, ix_upright_corner, ix_doleft_corner, ix_doright_corner]]
 
     # Approximate measurement of document's scale.
-    # Mean of vertical and horizontal lenghts.
-    µ_vl = (
+    # Mean of vertical (height) and horizontal (widht) lenghts.
+    µ_hl = (
         np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_upleft_corner])
         + np.linalg.norm(doc_corners[ix_doright_corner] - doc_corners[ix_upright_corner])
     )/2
-    µ_hl = (
+    µ_wl = (
         np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_doright_corner])
         + np.linalg.norm(doc_corners[ix_upleft_corner] - doc_corners[ix_upright_corner])
     )/2
-    doc_scale = µ_vl/µ_hl
+    doc_scale = µ_hl/µ_wl
     
     # Rescale document's corners to original size.
     doc_corners[:, 0] *= orig_imsize[0]/imsize[0]
@@ -129,11 +129,11 @@ def perspective_transformation(im, doc_corners, doc_scale):
     pts1 = np.float32(doc_corners)
     # Height and width of original image.
     H, W = imsize[:2]
-    # Rescale to respect scale of document.
-    W *= doc_scale
+    # Put into document's scale.
+    H = int(W*doc_scale)
     pts2 = np.float32([[0, 0], [0, H], [W, 0], [W, H]])
     M = cv2.getPerspectiveTransform(pts1, pts2)
-    imt = cv2.warpPerspective(im, M, (int(W), H))
+    imt = cv2.warpPerspective(im, M, (W, H))
     return imt
 
 
