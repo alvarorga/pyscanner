@@ -3,6 +3,134 @@ import cv2
 import imutils
 from itertools import combinations
 import numpy as np
+from numba import njit
+
+import time
+
+
+"""
+Check whether two lines defined by their Hough angle are parallel.
+"""
+@njit
+def are_parallel(θ1, θ2):
+    return np.abs(θ1-θ2) < np.pi/8 or np.abs(np.abs(θ1-θ2)-np.pi) < np.pi/8
+
+
+"""
+Check parallelity relations between four lines.
+
+Lines must be parallel in pairs: two parallel lines and two other parallel lines.
+"""
+@njit
+def check_parallelity(θ):
+    are_par_01 = are_parallel(θ[0], θ[1])
+    are_par_02 = are_parallel(θ[0], θ[2])
+    are_par_03 = are_parallel(θ[0], θ[3])
+    are_par_12 = are_parallel(θ[1], θ[2])
+    are_par_13 = are_parallel(θ[1], θ[3])
+    are_par_23 = are_parallel(θ[2], θ[3])
+                                                    
+    # Check that lines are parallel in pairs.
+    if (not (are_par_01 and are_par_23)
+        and not (are_par_02 and are_par_13)
+        and not (are_par_03 and are_par_12)
+    ):
+        return True
+
+    # Check that lines of different pairs are not parallel.
+    if ((are_par_01 and are_par_02)
+        or (are_par_01 and are_par_03)
+        or (are_par_01 and are_par_03)
+        or (are_par_02 and are_par_03)
+        or (are_par_12 and are_par_13)
+    ):
+        return True
+    return False
+
+
+"""
+Find intersection between two Hough lines.
+"""
+@njit
+def line_intersection(ρ1, ρ2, θ1, θ2):
+    if np.abs(np.sin(θ1)) < 1e-3:
+        x = ρ1/np.cos(θ1)
+        y = (ρ2 - x*np.cos(θ2))/np.sin(θ2)
+    elif np.abs(np.sin(θ2)) < 1e-3:
+        x = ρ2/np.cos(θ2)
+        y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
+    else:
+        x = (ρ1/np.sin(θ1) - ρ2/np.sin(θ2))/(1/np.tan(θ1) - 1/np.tan(θ2))
+        y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
+    return [x, y]
+
+
+"""
+Choose whether a set of four Hough lines are valid document edges.
+
+Find the corners of the four Hough lines, check their parallelity
+relations, find the area inside them and, if the area is bigger than
+any other set of edges we have, update doc_corners and doc_edges
+accordingly.
+"""
+@njit
+def find_doc_edges(edges, doc_corners, doc_edges, max_area):
+    ρ = edges[:, 0]
+    θ = edges[:, 1]
+
+    # Check that lines are parallel in pairs.
+    if check_parallelity(θ):
+       return max_area
+
+    # Find corners.
+    corners = np.zeros((4, 2))
+    if are_parallel(θ[0], θ[1]) and are_parallel(θ[2], θ[3]):
+        corners[0] = line_intersection(ρ[0], ρ[2], θ[0], θ[2])
+        corners[1] = line_intersection(ρ[0], ρ[3], θ[0], θ[3])
+        corners[2] = line_intersection(ρ[1], ρ[2], θ[1], θ[2])
+        corners[3] = line_intersection(ρ[1], ρ[3], θ[1], θ[3])
+    if are_parallel(θ[0], θ[2]) and are_parallel(θ[1], θ[3]):
+        corners[0] = line_intersection(ρ[0], ρ[1], θ[0], θ[1])
+        corners[1] = line_intersection(ρ[0], ρ[3], θ[0], θ[3])
+        corners[2] = line_intersection(ρ[2], ρ[1], θ[2], θ[1])
+        corners[3] = line_intersection(ρ[2], ρ[3], θ[2], θ[3])
+    if are_parallel(θ[0], θ[3]) and are_parallel(θ[1], θ[2]):
+        corners[0] = line_intersection(ρ[0], ρ[1], θ[0], θ[1])
+        corners[1] = line_intersection(ρ[0], ρ[2], θ[0], θ[2])
+        corners[2] = line_intersection(ρ[3], ρ[1], θ[3], θ[1])
+        corners[3] = line_intersection(ρ[3], ρ[2], θ[3], θ[2])
+
+    # Identify the position of the corners. We select each of the 
+    # corners by projecting their coordinates on the lines y = x and 
+    # y = -x.
+    ix_upleft_corner = np.argmin(corners[:, 0] + corners[:, 1])
+    ix_doright_corner = np.argmax(corners[:, 0] + corners[:, 1])
+    ix_upright_corner = np.argmax(corners[:, 0] - corners[:, 1])
+    ix_doleft_corner = np.argmin(corners[:, 0] - corners[:, 1])
+
+    # Rearrange corners in order.
+    cp_corners = np.copy(corners)
+    corners[0] = cp_corners[ix_upleft_corner]
+    corners[1] = cp_corners[ix_upright_corner]
+    corners[2] = cp_corners[ix_doleft_corner]
+    corners[3] = cp_corners[ix_doright_corner]
+
+    # Compute area inside quadrilateral.
+    x = corners[:, 0]
+    y = corners[:, 1]
+    area = (
+        np.abs((x[1]-x[0])*(y[2]-y[1]) - (x[1]-x[2])*(y[0]-y[1]))/2
+        + np.abs((x[1]-x[3])*(y[2]-y[1]) - (x[1]-x[2])*(y[3]-y[1]))/2
+    )
+
+    if area > max_area:
+        doc_edges[:, 0] = ρ
+        doc_edges[:, 1] = θ
+        # For some reason we cannot change doc_corners by reference.
+        doc_corners[:, :] = corners
+        max_area = area
+
+    return max_area
 
 
 def corner_detection(im):
@@ -21,74 +149,13 @@ def corner_detection(im):
     # Find the document's corners. We select as corners those defined as the intersection
     # of four lines, which are parallel two by two, and have maximal area.
     max_area = -1.0
-    doc_corners = []
-    doc_edges = []
     # Iterate through every pair of lines. 
+    doc_corners = np.zeros((4, 2))
+    doc_edges = np.zeros((4, 2))
     for comb in combinations(range(np.shape(lines)[0]), 4):
-        ρ = lines[comb, 0]
-        θ = lines[comb, 1]
-        
-        # Check that lines are parallel by pairs.
-        def are_parallel(θ1, θ2):
-            return np.abs(θ1-θ2) < np.pi/8 or np.abs(np.abs(θ1-θ2)-np.pi) < np.pi/8
-                                                     
-        if (not (are_parallel(θ[0], θ[1]) and are_parallel(θ[2], θ[3]))
-            and not (are_parallel(θ[0], θ[2]) and are_parallel(θ[1], θ[3]))
-            and not (are_parallel(θ[0], θ[3]) and are_parallel(θ[1], θ[2]))
-        ):
-            continue
-
-        # Check that there are no more than 3 parallel lines.
-        if ((are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[2]))
-            or (are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[3]))
-            or (are_parallel(θ[0], θ[1]) and are_parallel(θ[0], θ[3]))
-            or (are_parallel(θ[0], θ[2]) and are_parallel(θ[0], θ[3]))
-            or (are_parallel(θ[1], θ[2]) and are_parallel(θ[1], θ[3]))
-        ):
-            continue
-        
-        # Find all 4 corners.
-        def line_intersection(ρ1, ρ2, θ1, θ2):
-            if np.abs(np.sin(θ1)) < 1e-3:
-                x = ρ1/np.cos(θ1)
-                y = (ρ2 - x*np.cos(θ2))/np.sin(θ2)
-            elif np.abs(np.sin(θ2)) < 1e-3:
-                x = ρ2/np.cos(θ2)
-                y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
-            else:
-                x = (ρ1/np.sin(θ1) - ρ2/np.sin(θ2))/(1/np.tan(θ1) - 1/np.tan(θ2))
-                y = (ρ1 - x*np.cos(θ1))/np.sin(θ1)
-            return [x, y]
-        
-        corners = []
-        if are_parallel(θ[0], θ[1]) and are_parallel(θ[2], θ[3]):
-            corners.append(line_intersection(ρ[0], ρ[2], θ[0], θ[2]))
-            corners.append(line_intersection(ρ[0], ρ[3], θ[0], θ[3]))
-            corners.append(line_intersection(ρ[1], ρ[2], θ[1], θ[2]))
-            corners.append(line_intersection(ρ[1], ρ[3], θ[1], θ[3]))
-        if are_parallel(θ[0], θ[2]) and are_parallel(θ[1], θ[3]):
-            corners.append(line_intersection(ρ[0], ρ[1], θ[0], θ[1]))
-            corners.append(line_intersection(ρ[0], ρ[3], θ[0], θ[3]))
-            corners.append(line_intersection(ρ[2], ρ[1], θ[2], θ[1]))
-            corners.append(line_intersection(ρ[2], ρ[3], θ[2], θ[3]))
-        if are_parallel(θ[0], θ[3]) and are_parallel(θ[1], θ[2]):
-            corners.append(line_intersection(ρ[0], ρ[1], θ[0], θ[1]))
-            corners.append(line_intersection(ρ[0], ρ[2], θ[0], θ[2]))
-            corners.append(line_intersection(ρ[3], ρ[1], θ[3], θ[1]))
-            corners.append(line_intersection(ρ[3], ρ[2], θ[3], θ[2]))
-        corners = np.array(corners)
-        
-        # Compute area inside lines.
-        def triangle_area(x, y):
-            return np.abs((x[0]-x[2])*(y[1]-y[0]) - (x[0]-x[1])*(y[2]-y[0]))/2
-        area = (triangle_area(corners[[0, 1, 2], 0], corners[[0, 1, 2], 1])
-             + triangle_area(corners[[0, 1, 3], 0], corners[[0, 1, 3], 1]))
-
-        # Choose if they are candidate for document's corners.
-        if area > max_area:
-            doc_corners = corners
-            doc_edges = lines[comb, :]
-            max_area = area
+        # Find the four corners and area inside detected document and
+        # check if area is bigger than what we have.
+        max_area = find_doc_edges(lines[comb, :], doc_corners, doc_edges, max_area)
 
     # Check if the algorithm has detected four corners.
     if np.shape(doc_corners)[0] == 4:
@@ -97,23 +164,15 @@ def corner_detection(im):
         has_detected_corners = False
         return [], [], lines, has_detected_corners, 1.
     
-    # Rearrange document's corners. We select each of the corners by projecting
-    # their coordinates on the lines y = x and y = -x.
-    ix_upleft_corner = np.argmin(doc_corners[:, 0] + doc_corners[:, 1])
-    ix_doright_corner = np.argmax(doc_corners[:, 0] + doc_corners[:, 1])
-    ix_upright_corner = np.argmin(doc_corners[:, 0] - doc_corners[:, 1])
-    ix_doleft_corner = np.argmax(doc_corners[:, 0] - doc_corners[:, 1])
-    doc_corners = doc_corners[[ix_upleft_corner, ix_upright_corner, ix_doleft_corner, ix_doright_corner]]
-
     # Approximate measurement of document's scale.
     # Mean of vertical (height) and horizontal (widht) lenghts.
     µ_hl = (
-        np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_upleft_corner])
-        + np.linalg.norm(doc_corners[ix_doright_corner] - doc_corners[ix_upright_corner])
+        np.linalg.norm(doc_corners[2] - doc_corners[0])
+        + np.linalg.norm(doc_corners[3] - doc_corners[1])
     )/2
     µ_wl = (
-        np.linalg.norm(doc_corners[ix_doleft_corner] - doc_corners[ix_doright_corner])
-        + np.linalg.norm(doc_corners[ix_upleft_corner] - doc_corners[ix_upright_corner])
+        np.linalg.norm(doc_corners[0] - doc_corners[1])
+        + np.linalg.norm(doc_corners[2] - doc_corners[3])
     )/2
     doc_scale = µ_hl/µ_wl
     
@@ -131,7 +190,7 @@ def perspective_transformation(im, doc_corners, doc_scale):
     H, W = imsize[:2]
     # Put into document's scale.
     H = int(W*doc_scale)
-    pts2 = np.float32([[0, 0], [0, H], [W, 0], [W, H]])
+    pts2 = np.float32([[0, 0], [W, 0], [0, H], [W, H]])
     M = cv2.getPerspectiveTransform(pts1, pts2)
     imt = cv2.warpPerspective(im, M, (W, H))
     return imt
