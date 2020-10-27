@@ -142,8 +142,8 @@ def corner_detection(im):
     
     # Find Hough lines in the image.
     img = cv2.GaussianBlur(img, (3, 3), 0) 
-    edges = cv2.Canny(img, 40, 120)
-    lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
+    edges = cv2.Canny(img, 100, 200)
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 120)
     lines = lines.reshape(np.shape(lines)[0], 2)
 
     # Find the document's corners. We select as corners those defined as the intersection
@@ -218,6 +218,7 @@ def scanner_main(image_path, dest_name, debug=False):
     if has_detected_corners:
         im = perspective_transformation(im, doc_corners, doc_scale)
         im = do_image_thresholding(im)
+        im = imutils.resize(im, height=1000)
 
         # Save final image.
         cv2.imwrite(dest_name, im)
